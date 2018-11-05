@@ -1,0 +1,7 @@
+*.pyc
+downloads/*
+!downloads/.keep
+tmp/*
+!tmp/.keep
+output/*
+!output/.keep
