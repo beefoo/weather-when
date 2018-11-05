@@ -2,6 +2,7 @@
 
 import argparse
 import json
+from lib import *
 import numpy as np
 import os
 from pprint import pprint
@@ -10,10 +11,16 @@ import sys
 
 # input
 parser = argparse.ArgumentParser()
+# Data options
 parser.add_argument('-date', dest="DATETIME", default="1986-01-29-18", help="Date to use; hours can be 00, 06, 12, or 18")
 parser.add_argument('-forecast', dest="HOUR_FORECAST", default=6, type=int, help="Instantaneous forecast at x hours (x can be 0-6)")
 parser.add_argument('-highres', dest="HIGH_RES", default=0, type=int, help="Download high res data? (takes much longer)")
-parser.add_argument('-label', dest="LABEL", default="", help="Label for map")
+# Image options
+parser.add_argument('-width', dest="WIDTH", default=24, type=float, help="Width of image in inches")
+parser.add_argument('-height', dest="HEIGHT", default=18, type=float, help="Height of image in inches")
+parser.add_argument('-margin', dest="MARGIN", default=1, type=float, help="Margin in inches")
+parser.add_argument('-dpi', dest="DPI", default=300, type=int, help="Dots per inch (resolution)")
+parser.add_argument('-label', dest="LABEL", default="", help="Label for image")
 parser.add_argument('-out', dest="OUTFILE", default="", help="Output filename")
 args = parser.parse_args()
 
@@ -32,6 +39,11 @@ downloadURL = "https://nomads.ncdc.noaa.gov/data/cfsr/%s%s/%s" % (YYYY, MM, file
 outFilename = ".".join([prefix, args.DATETIME, str(HOUR_FORECAST)])
 dataPath = OUTPUT_DIR + outFilename +  ".json"
 OUTFILE = OUTPUT_DIR + outFilename + ".png" if len(args.OUTFILE) <= 0 else args.OUTFILE
+
+WIDTH = args.WIDTH
+HEIGHT = args.HEIGHT
+MARGIN = args.MARGIN
+DPI = args.DPI
 
 nx = None
 ny = None
@@ -65,9 +77,6 @@ if not os.path.isfile(dataPath):
         jsonData = json.load(f)
 
     # # misc debugging statements
-    # def inspectJSON(data, key):
-    #     labels = sorted(list(set([d["header"][key] for d in data])))
-    #     pprint(labels)
     # print(len(jsonData))
     # inspectJSON(jsonData, "forecastTime")
     # inspectJSON(jsonData, "refTime")
@@ -125,3 +134,7 @@ else:
     ny = processedData["ny"]
     windData = processedData["data"]
     print("%s x %s x 2 = %s" % (nx, ny, len(windData)))
+
+# Initialize image data
+pixelData = np.zeros(nx * ny * 3)
+windData = np.array(windData)
