@@ -12,6 +12,7 @@ import sys
 parser = argparse.ArgumentParser()
 parser.add_argument('-date', dest="DATETIME", default="1986-01-29-18", help="Date to use; hours can be 00, 06, 12, or 18")
 parser.add_argument('-forecast', dest="HOUR_FORECAST", default=6, type=int, help="Instantaneous forecast at x hours (x can be 0-6)")
+parser.add_argument('-highres', dest="HIGH_RES", default=0, type=int, help="Download high res data? (takes much longer)")
 parser.add_argument('-label', dest="LABEL", default="", help="Label for map")
 parser.add_argument('-out', dest="OUTFILE", default="", help="Output filename")
 args = parser.parse_args()
@@ -22,11 +23,15 @@ OUTPUT_DIR = "output/"
 
 YYYY, MM, DD, HH = tuple(args.DATETIME.split("-"))
 HOUR_FORECAST = args.HOUR_FORECAST
-OUTFILE = OUTPUT_DIR + args.DATETIME + ".png" if len(args.OUTFILE) <= 0 else args.OUTFILE
 
-filename = "wnd10m.l.gdas.%s%s.grb2" % (YYYY, MM)
+# example URL = https://nomads.ncdc.noaa.gov/data/cfsr/198601/wnd10m.l.gdas.198601.grb2.inv
+prefix = "wnd10m.gdas" if args.HIGH_RES > 0 else "wnd10m.l.gdas"
+filename = "%s.%s%s.grb2" % (prefix, YYYY, MM)
 downloadURL = "https://nomads.ncdc.noaa.gov/data/cfsr/%s%s/%s" % (YYYY, MM, filename)
-dataPath = OUTPUT_DIR + args.DATETIME + "." + str(HOUR_FORECAST) +  ".json"
+
+outFilename = ".".join([prefix, args.DATETIME, str(HOUR_FORECAST)])
+dataPath = OUTPUT_DIR + outFilename +  ".json"
+OUTFILE = OUTPUT_DIR + outFilename + ".png" if len(args.OUTFILE) <= 0 else args.OUTFILE
 
 nx = None
 ny = None
@@ -59,6 +64,17 @@ if not os.path.isfile(dataPath):
     with open(jsonPath) as f:
         jsonData = json.load(f)
 
+    # # misc debugging statements
+    # def inspectJSON(data, key):
+    #     labels = sorted(list(set([d["header"][key] for d in data])))
+    #     pprint(labels)
+    # print(len(jsonData))
+    # inspectJSON(jsonData, "forecastTime")
+    # inspectJSON(jsonData, "refTime")
+    # pprint(jsonData[-1]["header"])
+    # pprint(jsonData[0]["data"][:20])
+    # sys.exit()
+
     # Filter to only the date/time and forecast hour of choice
     dateTimeString = "%s-%s-%sT%s:00:00.000Z" %  (YYYY, MM, DD, HH)
     jsonData = [d for d in jsonData if str(d["header"]["refTime"])==dateTimeString and d["header"]["forecastTime"]==HOUR_FORECAST]
@@ -69,16 +85,6 @@ if not os.path.isfile(dataPath):
     if len(jsonData) < 2:
         print("Exiting")
         sys.exit()
-
-    # # misc debugging statements
-    # def inspectJSON(data, key):
-    #     labels = sorted(list(set([d["header"][key] for d in data])))
-    #     pprint(labels)
-    # print(len(jsonData))
-    # inspectJSON(jsonData, "forecastTime")
-    # inspectJSON(jsonData, "refTime")
-    # pprint(jsonData[-1]["header"])
-    # pprint(jsonData[0]["data"][:20])
 
     # Sort results, so first entry is U and second is V
     jsonData = sorted(jsonData, key=lambda d: d["header"]["parameterNumberName"])
