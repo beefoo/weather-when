@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import datetime
 import json
 from lib import *
 import numpy as np
 import os
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageDraw, ImageFont
 from pprint import pprint
 import subprocess
 import sys
@@ -21,6 +22,7 @@ parser.add_argument('-width', dest="WIDTH", default=24, type=float, help="Width 
 parser.add_argument('-height', dest="HEIGHT", default=18, type=float, help="Height of image in inches")
 parser.add_argument('-margin', dest="MARGIN", default=1, type=float, help="Margin in inches")
 parser.add_argument('-dpi', dest="DPI", default=300, type=int, help="Dots per inch (resolution)")
+parser.add_argument('-out', dest="OUTFILE", default="", help="Output filename")
 # Wind style options
 parser.add_argument('-lon', dest="LON_RANGE", default="0,360", help="Longitude range")
 parser.add_argument('-ppp', dest="POINTS_PER_PARTICLE", type=int, default=1000, help="Points per particle")
@@ -31,7 +33,9 @@ parser.add_argument('-mag', dest="MAGNITUDE_RANGE", default="0.0,12.0", help="Ma
 parser.add_argument('-alpha', dest="ALPHA_RANGE", default="0.0,200.0", help="Alpha range (0-255)")
 # Label options
 parser.add_argument('-label', dest="LABEL", default="", help="Label for image")
-parser.add_argument('-out', dest="OUTFILE", default="", help="Output filename")
+parser.add_argument('-font', dest="FONT", default="fonts/Bellefair-Regular.ttf", help="Font family")
+parser.add_argument('-fsize', dest="FONT_SIZE", default=80, type=int, help="Font size in points")
+
 args = parser.parse_args()
 
 TEMP_DIR = "tmp/"
@@ -62,6 +66,13 @@ PARTICLES = args.PARTICLES
 LINE_WIDTH_RANGE = tuple([float(v) for v in args.LINE_WIDTH_RANGE.split(",")])
 MAGNITUDE_RANGE = tuple([float(v) for v in args.MAGNITUDE_RANGE.split(",")])
 ALPHA_RANGE = tuple([float(v) for v in args.ALPHA_RANGE.split(",")])
+
+LABEL = args.LABEL
+if LABEL == "":
+    dt = datetime.datetime.strptime("-".join([YYYY, MM, DD]), '%Y-%m-%d')
+    LABEL = dt.strftime('Wind. %B %d, %Y')
+FONT = args.FONT
+FONT_SIZE = args.FONT_SIZE
 
 nx = None
 ny = None
@@ -196,11 +207,21 @@ contentY = roundInt(contentY)
 print("Processing pixels...")
 pixels = getPixelData(windData, nx, ny, contentWidth, contentHeight, particleProperties, POINTS_PER_PARTICLE, VELOCITY_MULTIPLIER, MAGNITUDE_RANGE, LINE_WIDTH_RANGE, ALPHA_RANGE)
 print("Building image...")
+
+# add pixels and invert
 im = Image.fromarray(pixels, mode="L")
 im = ImageOps.invert(im)
+
 # add margin
 base = Image.new('L', (WIDTH, HEIGHT), 255)
 base.paste(im, (contentX, contentY, contentX+contentWidth, contentY+contentHeight))
+
+# add label
+labelMargin = roundInt(0.125 * DPI)
+fnt = ImageFont.truetype(FONT, FONT_SIZE)
+imgDraw = ImageDraw.Draw(base)
+imgDraw.text((contentX, contentY + contentHeight + labelMargin), LABEL, font=fnt, fill=0)
+
 print("Saving image...")
 base.save(OUTFILE)
 print("Saved file %s" % OUTFILE)
