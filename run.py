@@ -5,6 +5,7 @@ import json
 from lib import *
 import numpy as np
 import os
+from PIL import Image, ImageOps
 from pprint import pprint
 import subprocess
 import sys
@@ -20,6 +21,15 @@ parser.add_argument('-width', dest="WIDTH", default=24, type=float, help="Width 
 parser.add_argument('-height', dest="HEIGHT", default=18, type=float, help="Height of image in inches")
 parser.add_argument('-margin', dest="MARGIN", default=1, type=float, help="Margin in inches")
 parser.add_argument('-dpi', dest="DPI", default=300, type=int, help="Dots per inch (resolution)")
+# Wind style options
+parser.add_argument('-lon', dest="LON_RANGE", default="0,360", help="Longitude range")
+parser.add_argument('-ppp', dest="POINTS_PER_PARTICLE", type=int, default=1000, help="Points per particle")
+parser.add_argument('-vel', dest="VELOCITY_MULTIPLIER", type=float, default=0.04, help="Number of pixels per degree of lon/lat")
+parser.add_argument('-particles', dest="PARTICLES", type=int, default=100000, help="Number of particles to display")
+parser.add_argument('-lw', dest="LINE_WIDTH_RANGE", default="1.0,1.0", help="Line width range")
+parser.add_argument('-mag', dest="MAGNITUDE_RANGE", default="0.0,12.0", help="Magnitude range")
+parser.add_argument('-alpha', dest="ALPHA_RANGE", default="0.0,200.0", help="Alpha range (0-255)")
+# Label options
 parser.add_argument('-label', dest="LABEL", default="", help="Label for image")
 parser.add_argument('-out', dest="OUTFILE", default="", help="Output filename")
 args = parser.parse_args()
@@ -40,10 +50,18 @@ outFilename = ".".join([prefix, args.DATETIME, str(HOUR_FORECAST)])
 dataPath = OUTPUT_DIR + outFilename +  ".json"
 OUTFILE = OUTPUT_DIR + outFilename + ".png" if len(args.OUTFILE) <= 0 else args.OUTFILE
 
-WIDTH = args.WIDTH
-HEIGHT = args.HEIGHT
-MARGIN = args.MARGIN
 DPI = args.DPI
+WIDTH = args.WIDTH * DPI
+HEIGHT = args.HEIGHT * DPI
+MARGIN = args.MARGIN * DPI
+
+LON_RANGE = [float(d) for d in args.LON_RANGE.strip().split(",")]
+POINTS_PER_PARTICLE = args.POINTS_PER_PARTICLE
+VELOCITY_MULTIPLIER = args.VELOCITY_MULTIPLIER
+PARTICLES = args.PARTICLES
+LINE_WIDTH_RANGE = tuple([float(v) for v in args.LINE_WIDTH_RANGE.split(",")])
+MAGNITUDE_RANGE = tuple([float(v) for v in args.MAGNITUDE_RANGE.split(",")])
+ALPHA_RANGE = tuple([float(v) for v in args.ALPHA_RANGE.split(",")])
 
 nx = None
 ny = None
@@ -136,5 +154,53 @@ else:
     print("%s x %s x 2 = %s" % (nx, ny, len(windData)))
 
 # Initialize image data
-pixelData = np.zeros(nx * ny * 3)
 windData = np.array(windData)
+windData = windData.astype(np.float32)
+
+# Offset the data
+print "Offsetting data..."
+offset = int(round(LON_RANGE[0] + 180.0))
+if offset != 0.0:
+    offset = int(round(offset / 360.0 * nx))
+windData = offsetData(windData, nx, ny, offset)
+
+# Initialize particle starting positions
+particleProperties = [
+    (pseudoRandom(i*3), # a stably random x
+     pseudoRandom(i*3+1)) # a stably random y
+    for i in range(PARTICLES)
+]
+
+# calculate content width and height
+contentWidth = WIDTH - MARGIN*2
+contentHeight = HEIGHT - MARGIN*2
+contentX = MARGIN
+contentY = MARGIN
+targetRatio = 1.0 * contentWidth / contentHeight
+dataRatio = 1.0 * nx / ny
+# target is wider than data, adjust width
+if targetRatio > dataRatio:
+    oldWidth = contentWidth
+    contentWidth = contentHeight * dataRatio
+    contentX += (oldWidth-contentWidth) * 0.5
+# target is narrower than data, adjust height
+else:
+    oldHeight = contentHeight
+    contentHeight = contentWidth / dataRatio
+    contentY += (oldHeight-contentHeight) * 0.5
+contentWidth = roundInt(contentWidth)
+contentHeight = roundInt(contentHeight)
+contentX = roundInt(contentX)
+contentY = roundInt(contentY)
+
+print("Processing pixels...")
+pixels = getPixelData(windData, nx, ny, contentWidth, contentHeight, particleProperties, POINTS_PER_PARTICLE, VELOCITY_MULTIPLIER, MAGNITUDE_RANGE, LINE_WIDTH_RANGE, ALPHA_RANGE)
+print("Building image...")
+im = Image.fromarray(pixels, mode="L")
+im = ImageOps.invert(im)
+# add margin
+base = Image.new('L', (WIDTH, HEIGHT), 255)
+base.paste(im, (contentX, contentY, contentX+contentWidth, contentY+contentHeight))
+print("Saving image...")
+base.save(OUTFILE)
+print("Saved file %s" % OUTFILE)
