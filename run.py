@@ -6,7 +6,7 @@ import json
 from lib import *
 import numpy as np
 import os
-from PIL import Image, ImageOps, ImageDraw, ImageFont
+from PIL import Image, ImageOps, ImageDraw, ImageFont, ImageFilter
 from pprint import pprint
 import subprocess
 import sys
@@ -31,6 +31,7 @@ parser.add_argument('-particles', dest="PARTICLES", type=int, default=100000, he
 parser.add_argument('-lw', dest="LINE_WIDTH_RANGE", default="1.0,1.0", help="Line width range")
 parser.add_argument('-mag', dest="MAGNITUDE_RANGE", default="0.0,12.0", help="Magnitude range")
 parser.add_argument('-alpha', dest="ALPHA_RANGE", default="0.0,200.0", help="Alpha range (0-255)")
+parser.add_argument('-blur', dest="BLUR_RADIUS", default=0.0, type=float, help="Blur radius")
 # Label options
 parser.add_argument('-label', dest="LABEL", default="", help="Label for image")
 parser.add_argument('-font', dest="FONT", default="fonts/Bellefair-Regular.ttf", help="Font family")
@@ -66,6 +67,7 @@ PARTICLES = args.PARTICLES
 LINE_WIDTH_RANGE = tuple([float(v) for v in args.LINE_WIDTH_RANGE.split(",")])
 MAGNITUDE_RANGE = tuple([float(v) for v in args.MAGNITUDE_RANGE.split(",")])
 ALPHA_RANGE = tuple([float(v) for v in args.ALPHA_RANGE.split(",")])
+BLUR_RADIUS = args.BLUR_RADIUS
 
 LABEL = args.LABEL
 if LABEL == "":
@@ -211,6 +213,8 @@ print("Building image...")
 # add pixels and invert
 im = Image.fromarray(pixels, mode="L")
 im = ImageOps.invert(im)
+if BLUR_RADIUS > 0:
+    im = im.filter(ImageFilter.GaussianBlur(BLUR_RADIUS))
 
 # add margin
 base = Image.new('L', (WIDTH, HEIGHT), 255)
