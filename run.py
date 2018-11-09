@@ -27,11 +27,12 @@ parser.add_argument('-out', dest="OUTFILE", default="", help="Output filename")
 parser.add_argument('-lon', dest="LON_RANGE", default="0,360", help="Longitude range")
 parser.add_argument('-ppp', dest="POINTS_PER_PARTICLE", type=int, default=1000, help="Points per particle")
 parser.add_argument('-vel', dest="VELOCITY_MULTIPLIER", type=float, default=0.04, help="Number of pixels per degree of lon/lat")
-parser.add_argument('-particles', dest="PARTICLES", type=int, default=100000, help="Number of particles to display")
-parser.add_argument('-lw', dest="LINE_WIDTH_RANGE", default="1.0,1.0", help="Line width range")
+parser.add_argument('-particles', dest="PARTICLES", type=int, default=150000, help="Number of particles to display")
+parser.add_argument('-lw', dest="LINE_WIDTH_RANGE", default="2.0,2.0", help="Line width range")
 parser.add_argument('-mag', dest="MAGNITUDE_RANGE", default="0.0,12.0", help="Magnitude range")
-parser.add_argument('-alpha', dest="ALPHA_RANGE", default="0.0,200.0", help="Alpha range (0-255)")
+parser.add_argument('-alpha', dest="ALPHA_RANGE", default="100.0,255.0", help="Alpha range (0-255)")
 parser.add_argument('-blur', dest="BLUR_RADIUS", default=0.0, type=float, help="Blur radius")
+parser.add_argument('-brightness', dest="BRIGHTNESS", default=0.2, type=float, help="Brightness factor; 1.0 = no change")
 # Label options
 parser.add_argument('-label', dest="LABEL", default="", help="Label for image")
 parser.add_argument('-font', dest="FONT", default="fonts/Bellefair-Regular.ttf", help="Font family")
@@ -68,11 +69,13 @@ LINE_WIDTH_RANGE = tuple([float(v) for v in args.LINE_WIDTH_RANGE.split(",")])
 MAGNITUDE_RANGE = tuple([float(v) for v in args.MAGNITUDE_RANGE.split(",")])
 ALPHA_RANGE = tuple([float(v) for v in args.ALPHA_RANGE.split(",")])
 BLUR_RADIUS = args.BLUR_RADIUS
+BRIGHTNESS = args.BRIGHTNESS
+SMOOTH_FACTOR = 2.0
 
 LABEL = args.LABEL
 if LABEL == "":
     dt = datetime.datetime.strptime("-".join([YYYY, MM, DD]), '%Y-%m-%d')
-    LABEL = dt.strftime('Wind. %B %d, %Y')
+    LABEL = dt.strftime('Wind at 10m above sea level. %B %d, %Y')
 FONT = args.FONT
 FONT_SIZE = args.FONT_SIZE
 
@@ -207,12 +210,16 @@ contentX = roundInt(contentX)
 contentY = roundInt(contentY)
 
 print("Processing pixels...")
-pixels = getPixelData(windData, nx, ny, contentWidth, contentHeight, particleProperties, POINTS_PER_PARTICLE, VELOCITY_MULTIPLIER, MAGNITUDE_RANGE, LINE_WIDTH_RANGE, ALPHA_RANGE)
+scaledW = roundInt(contentWidth * SMOOTH_FACTOR)
+scaledH = roundInt(contentHeight * SMOOTH_FACTOR)
+pixels = getPixelData(windData, nx, ny, scaledW, scaledH, particleProperties, POINTS_PER_PARTICLE, VELOCITY_MULTIPLIER, MAGNITUDE_RANGE, LINE_WIDTH_RANGE, ALPHA_RANGE, BRIGHTNESS)
 print("Building image...")
 
 # add pixels and invert
 im = Image.fromarray(pixels, mode="L")
 im = ImageOps.invert(im)
+if SMOOTH_FACTOR > 0.0:
+    im = im.resize((contentWidth, contentHeight), Image.LANCZOS)
 if BLUR_RADIUS > 0:
     im = im.filter(ImageFilter.GaussianBlur(BLUR_RADIUS))
 

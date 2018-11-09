@@ -6,7 +6,7 @@ import random
 
 os.environ['PYOPENCL_COMPILER_OUTPUT'] = '1'
 
-def getPixelData(fData, dw, dh, tw, th, particles, pointsPerParticle, velocityMultiplier, magRange, lineWidthRange, alphaRange):
+def getPixelData(fData, dw, dh, tw, th, particles, pointsPerParticle, velocityMultiplier, magRange, lineWidthRange, alphaRange, brightnessFactor):
     h = len(particles)
     w = pointsPerParticle
     dim = 4 # four points: x, y, alpha, width
@@ -110,49 +110,129 @@ def getPixelData(fData, dw, dh, tw, th, particles, pointsPerParticle, velocityMu
 
     }
 
-    void drawSingleLine(__global float *p, int x0, int y0, int x1, int y1, int w, int h, float alpha) {
+    // integer part of x
+    static float ipart(float x) {
+        return floor(x);
+    }
+    static float xround(float x) {
+        return ipart(x + 0.5);
+    }
+    // fractional part of x
+    static float fpart(float x) {
+        return x - floor(x);
+    }
+    static float rfpart(float x) {
+        return 1.0 - fpart(x);
+    }
+
+    void plot(__global float *p, int w, int h, float alpha, float fx, float fy, float brightness) {
+        int x = (int) round(fx);
+        int y = (int) round(fy);
+        x = clamp(x, 0, w-1);
+        y = clamp(y, 0, h-1);
+        // hack to make things darker
+        if (brightness > 0.0) {
+            float factor = %f; // lower number = darker
+            brightness = pow((float) brightness, factor);
+        }
+        p[y*w+x] = alpha * brightness;
+    }
+
+    // anti-aliased line
+    // https://en.wikipedia.org/wiki/Xiaolin_Wu's_line_algorithm
+    void drawSingleLine(__global float *p, int _x0, int _y0, int _x1, int _y1, int w, int h, float alpha) {
         // clamp
-        x0 = clamp(x0, 0, w-1);
-        x1 = clamp(x1, 0, w-1);
-        y0 = clamp(y0, 0, h-1);
-        y1 = clamp(y1, 0, h-1);
+        _x0 = clamp(_x0, 0, w-1);
+        _x1 = clamp(_x1, 0, w-1);
+        _y0 = clamp(_y0, 0, h-1);
+        _y1 = clamp(_y1, 0, h-1);
 
-        int dx = abs(x1-x0);
-        int dy = abs(y1-y0);
+        float x0 = (float) _x0;
+        float x1 = (float) _x1;
+        float y0 = (float) _y0;
+        float y1 = (float) _y1;
 
-        if (dx==0 && dy==0) {
+        float dx = (float) abs(_x1-_x0);
+        float dy = (float) abs(_y1-_y0);
+        bool steep = (dy > dx);
+        float temp = 0;
+
+        if (dx==0.0 && dy==0.0) {
             return;
         }
 
-        int sy = 1;
-        int sx = 1;
-        if (y0>=y1) {
-            sy = -1;
+        if (steep) {
+            // swap x0, y0
+            temp = x0;
+            x0 = y0;
+            y0 = temp;
+            // swap x1, y1
+            temp = x1;
+            x1 = y1;
+            y1 = temp;
         }
-        if (x0>=x1) {
-            sx = -1;
-        }
-        int err = dx/2;
-        if (dx<=dy) {
-            err = -dy/2;
-        }
-        int e2 = err;
 
-        int x = x0;
-        int y = y0;
-        for(int i=0; i<w; i++){
-            p[y*w+x] = alpha;
-            if (x==x1 && y==y1) {
-                break;
+        if (x0 > x1) {
+            // swap x0, x1
+            temp = x0;
+            x0 = x1;
+            x1 = temp;
+            // swap y0, y1
+            temp = y0;
+            y0 = y1;
+            y1 = temp;
+        }
+
+        dx = x1 - x0;
+        dy = y1 - y0;
+        float gradient = 1.0;
+        if (dx >= 0) {
+            float gradient = dy / dx;
+        }
+
+        // handle first endpoint
+        float xend = xround(x0);
+        float yend = y0 + gradient * (xend - x0);
+        float xgap = rfpart(x0 + 0.5);
+        float xpxl1 = xend;
+        float ypxl1 = ipart(yend);
+        if (steep) {
+            plot(p, w, h, alpha, ypxl1, xpxl1, rfpart(yend) * xgap);
+            plot(p, w, h, alpha, ypxl1+1.0, xpxl1, fpart(yend) * xgap);
+        } else {
+            plot(p, w, h, alpha, xpxl1, ypxl1, rfpart(yend) * xgap);
+            plot(p, w, h, alpha, xpxl1, ypxl1+1.0, fpart(yend) * xgap);
+        }
+        float intery = yend + gradient; // first y-intersection for the main loop
+
+        // handle second endpoint
+        xend = xround(x1);
+        yend = y1 + gradient * (xend - x1);
+        xgap = fpart(x1 + 0.5);
+        float xpxl2 = xend;
+        float ypxl2 = ipart(yend);
+        if (steep) {
+            plot(p, w, h, alpha, ypxl2, xpxl2, rfpart(yend) * xgap);
+            plot(p, w, h, alpha, ypxl2+1.0, xpxl2, fpart(yend) * xgap);
+        } else {
+            plot(p, w, h, alpha, xpxl2, ypxl2, rfpart(yend) * xgap);
+            plot(p, w, h, alpha, xpxl2, ypxl2+1.0, fpart(yend) * xgap);
+        }
+
+        // main loop
+        int xfrom = (int) xpxl1 + 1;
+        int xto = (int) xpxl2 - 1;
+        if (steep) {
+            for(int x=xfrom; x<=xto; x++) {
+                plot(p, w, h, alpha, ipart(intery), x, rfpart(intery));
+                plot(p, w, h, alpha, ipart(intery)+1.0, x,  fpart(intery));
+                intery = intery + gradient;
             }
-            e2 = err;
-            if (e2 >-dx) {
-                err -= dy;
-                x += sx;
-            }
-            if (e2 < dy) {
-                err += dx;
-                y += sy;
+        } else {
+            for(int x=xfrom; x<=xto; x++) {
+                plot(p, w, h, alpha, x, ipart(intery), rfpart(intery));
+                plot(p, w, h, alpha, x, ipart(intery)+1.0, fpart(intery));
+                intery = intery + gradient;
             }
         }
     }
@@ -259,7 +339,7 @@ def getPixelData(fData, dw, dh, tw, th, particles, pointsPerParticle, velocityMu
             y = y1;
         }
     }
-    """ % (w, dw, dh, tw, th, magRange[0], magRange[1], alphaRange[0], alphaRange[1], velocityMultiplier, lineWidthRange[0], lineWidthRange[1])
+    """ % (brightnessFactor, w, dw, dh, tw, th, magRange[0], magRange[1], alphaRange[0], alphaRange[1], velocityMultiplier, lineWidthRange[0], lineWidthRange[1])
 
     # Get platforms, both CPU and GPU
     plat = cl.get_platforms()
