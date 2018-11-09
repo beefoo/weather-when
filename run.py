@@ -16,12 +16,15 @@ import sys
 #  python run.py -highres 1 -alpha " 0.0,255.0"
 #  python run.py -highres 1 -lw " 1.0,1.0" -brightness 0.5 -alpha " 0.0,255.0"
 
+#  python run.py -highres 1 -date " 2015-07-04-12" -rtmp 0
+
 # input
 parser = argparse.ArgumentParser()
 # Data options
 parser.add_argument('-date', dest="DATETIME", default="1986-01-29-18", help="Date to use; hours can be 00, 06, 12, or 18")
 parser.add_argument('-forecast', dest="HOUR_FORECAST", default=6, type=int, help="Instantaneous forecast at x hours (x can be 0-6)")
 parser.add_argument('-highres', dest="HIGH_RES", default=0, type=int, help="Download high res data? (takes much longer)")
+parser.add_argument('-rtmp', dest="REMOVE_TEMP", default=1, type=int, help="Remove temporary files?")
 # Image options
 parser.add_argument('-width', dest="WIDTH", default=20, type=float, help="Width of image in inches")
 parser.add_argument('-height', dest="HEIGHT", default=16, type=float, help="Height of image in inches")
@@ -49,17 +52,26 @@ TEMP_DIR = "tmp/"
 DOWNLOAD_DIR = "downloads/"
 OUTPUT_DIR = "output/"
 
-YYYY, MM, DD, HH = tuple(args.DATETIME.split("-"))
+YYYY, MM, DD, HH = tuple(args.DATETIME.strip().split("-"))
 HOUR_FORECAST = args.HOUR_FORECAST
 
-# example URL = https://nomads.ncdc.noaa.gov/data/cfsr/198601/wnd10m.l.gdas.198601.grb2.inv
+# Dates: Jan 1, 1979 - Mar 31, 2011
+    # Source: https://www.ncdc.noaa.gov/data-access/model-data/model-datasets/climate-forecast-system-version2-cfsv2#CFS%20Reanalysis%20(CFSR)
+    # Example URL = https://nomads.ncdc.noaa.gov/data/cfsr/198601/wnd10m.l.gdas.198601.grb2.inv
+# Dates: Apr 1, 2011 - ~3 months ago
+    # Source: https://www.ncdc.noaa.gov/data-access/model-data/model-datasets/climate-forecast-system-version2-cfsv2#CFSv2%20Operational%20Analysis
+    # Example URL = https://nomads.ncdc.noaa.gov/modeldata/cfsv2_analysis_timeseries/2011/201104/wnd10m.l.gdas.201104.grib2
 prefix = "wnd10m.gdas" if args.HIGH_RES > 0 else "wnd10m.l.gdas"
 filename = "%s.%s%s.grb2" % (prefix, YYYY, MM)
 downloadURL = "https://nomads.ncdc.noaa.gov/data/cfsr/%s%s/%s" % (YYYY, MM, filename)
+if int(YYYY) > 2011 or int(YYYY) == 2011 and int(MM) >= 4:
+    filename = "%s.%s%s.grib2" % (prefix, YYYY, MM)
+    downloadURL = "https://nomads.ncdc.noaa.gov/modeldata/cfsv2_analysis_timeseries/%s/%s%s/%s" % (YYYY, YYYY, MM, filename)
 
 outFilename = ".".join([prefix, args.DATETIME, str(HOUR_FORECAST)])
 dataPath = OUTPUT_DIR + outFilename +  ".json"
 OUTFILE = OUTPUT_DIR + outFilename + ".png" if len(args.OUTFILE) <= 0 else args.OUTFILE
+REMOVE_TEMP = args.REMOVE_TEMP > 0
 
 DPI = args.DPI
 WIDTH = args.WIDTH * DPI
@@ -158,9 +170,10 @@ if not os.path.isfile(dataPath):
         print("Wrote processed data to %s" % dataPath)
 
     # delete temp files
-    print("Deleting temporary files...")
-    os.remove(gribPath)
-    os.remove(jsonPath)
+    if REMOVE_TEMP:
+        print("Deleting temporary files...")
+        os.remove(gribPath)
+        os.remove(jsonPath)
 
 # We already processed data, just read it from file
 else:
