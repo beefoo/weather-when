@@ -11,6 +11,11 @@ from pprint import pprint
 import subprocess
 import sys
 
+#  python run.py -highres 1
+#  python run.py -highres 1 -lw " 1.0,1.0"
+#  python run.py -highres 1 -alpha " 0.0,255.0"
+#  python run.py -highres 1 -lw " 1.0,1.0" -brightness 0.5 -alpha " 0.0,255.0"
+
 # input
 parser = argparse.ArgumentParser()
 # Data options
@@ -18,25 +23,25 @@ parser.add_argument('-date', dest="DATETIME", default="1986-01-29-18", help="Dat
 parser.add_argument('-forecast', dest="HOUR_FORECAST", default=6, type=int, help="Instantaneous forecast at x hours (x can be 0-6)")
 parser.add_argument('-highres', dest="HIGH_RES", default=0, type=int, help="Download high res data? (takes much longer)")
 # Image options
-parser.add_argument('-width', dest="WIDTH", default=24, type=float, help="Width of image in inches")
-parser.add_argument('-height', dest="HEIGHT", default=18, type=float, help="Height of image in inches")
-parser.add_argument('-margin', dest="MARGIN", default=1, type=float, help="Margin in inches")
+parser.add_argument('-width', dest="WIDTH", default=20, type=float, help="Width of image in inches")
+parser.add_argument('-height', dest="HEIGHT", default=16, type=float, help="Height of image in inches")
+parser.add_argument('-margin', dest="MARGIN", default=3, type=float, help="Margin in inches")
 parser.add_argument('-dpi', dest="DPI", default=300, type=int, help="Dots per inch (resolution)")
 parser.add_argument('-out', dest="OUTFILE", default="", help="Output filename")
 # Wind style options
 parser.add_argument('-lon', dest="LON_RANGE", default="0,360", help="Longitude range")
-parser.add_argument('-ppp', dest="POINTS_PER_PARTICLE", type=int, default=1000, help="Points per particle")
-parser.add_argument('-vel', dest="VELOCITY_MULTIPLIER", type=float, default=0.04, help="Number of pixels per degree of lon/lat")
+parser.add_argument('-ppp', dest="POINTS_PER_PARTICLE", type=int, default=1000, help="Points per particle; higher values means longer lines")
+parser.add_argument('-vel', dest="VELOCITY_MULTIPLIER", type=float, default=0.04, help="Number of pixels per degree of lon/lat; smaller values create more detailed curves")
 parser.add_argument('-particles', dest="PARTICLES", type=int, default=150000, help="Number of particles to display")
 parser.add_argument('-lw', dest="LINE_WIDTH_RANGE", default="2.0,2.0", help="Line width range")
 parser.add_argument('-mag', dest="MAGNITUDE_RANGE", default="0.0,12.0", help="Magnitude range")
-parser.add_argument('-alpha', dest="ALPHA_RANGE", default="100.0,255.0", help="Alpha range (0-255)")
+parser.add_argument('-alpha', dest="ALPHA_RANGE", default="0.0,255.0", help="Alpha range (0-255)")
 parser.add_argument('-blur', dest="BLUR_RADIUS", default=0.0, type=float, help="Blur radius")
-parser.add_argument('-brightness', dest="BRIGHTNESS", default=0.2, type=float, help="Brightness factor; 1.0 = no change")
+parser.add_argument('-brightness', dest="BRIGHTNESS", default=0.2, type=float, help="Brightness factor; should be 0.0 < x < 1.0; 1.0 = no change")
 # Label options
 parser.add_argument('-label', dest="LABEL", default="", help="Label for image")
 parser.add_argument('-font', dest="FONT", default="fonts/Bellefair-Regular.ttf", help="Font family")
-parser.add_argument('-fsize', dest="FONT_SIZE", default=80, type=int, help="Font size in points")
+parser.add_argument('-fsize', dest="FONT_SIZE", default=40, type=int, help="Font size in points")
 
 args = parser.parse_args()
 
@@ -65,9 +70,9 @@ LON_RANGE = [float(d) for d in args.LON_RANGE.strip().split(",")]
 POINTS_PER_PARTICLE = args.POINTS_PER_PARTICLE
 VELOCITY_MULTIPLIER = args.VELOCITY_MULTIPLIER
 PARTICLES = args.PARTICLES
-LINE_WIDTH_RANGE = tuple([float(v) for v in args.LINE_WIDTH_RANGE.split(",")])
-MAGNITUDE_RANGE = tuple([float(v) for v in args.MAGNITUDE_RANGE.split(",")])
-ALPHA_RANGE = tuple([float(v) for v in args.ALPHA_RANGE.split(",")])
+LINE_WIDTH_RANGE = tuple([float(v) for v in args.LINE_WIDTH_RANGE.strip().split(",")])
+MAGNITUDE_RANGE = tuple([float(v) for v in args.MAGNITUDE_RANGE.strip().split(",")])
+ALPHA_RANGE = tuple([float(v) for v in args.ALPHA_RANGE.strip().split(",")])
 BLUR_RADIUS = args.BLUR_RADIUS
 BRIGHTNESS = args.BRIGHTNESS
 SMOOTH_FACTOR = 2.0
@@ -75,7 +80,7 @@ SMOOTH_FACTOR = 2.0
 LABEL = args.LABEL
 if LABEL == "":
     dt = datetime.datetime.strptime("-".join([YYYY, MM, DD]), '%Y-%m-%d')
-    LABEL = dt.strftime('Wind at 10m above sea level. %B %d, %Y')
+    LABEL = dt.strftime('Wind at 10m above sea level on %B %d, %Y')
 FONT = args.FONT
 FONT_SIZE = args.FONT_SIZE
 
@@ -234,5 +239,5 @@ imgDraw = ImageDraw.Draw(base)
 imgDraw.text((contentX, contentY + contentHeight + labelMargin), LABEL, font=fnt, fill=0)
 
 print("Saving image...")
-base.save(OUTFILE)
+base.save(OUTFILE, dpi=(DPI, DPI))
 print("Saved file %s" % OUTFILE)

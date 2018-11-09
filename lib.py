@@ -72,6 +72,7 @@ def getPixelData(fData, dw, dh, tw, th, particles, pointsPerParticle, velocityMu
 
     void drawLine(__global float *p, int x0, int y0, int x1, int y1, int w, int h, float alpha, int thickness);
     void drawSingleLine(__global float *p, int x0, int y0, int x1, int y1, int w, int h, float alpha);
+    void plot(__global float *p, int w, int h, float alpha, float fx, float fy, float brightness);
 
     void drawLine(__global float *p, int x0, int y0, int x1, int y1, int w, int h, float alpha, int thickness) {
         int dx = abs(x1-x0);
@@ -187,7 +188,7 @@ def getPixelData(fData, dw, dh, tw, th, particles, pointsPerParticle, velocityMu
         dy = y1 - y0;
         float gradient = 1.0;
         if (dx >= 0) {
-            float gradient = dy / dx;
+            gradient = dy / dx;
         }
 
         // handle first endpoint
