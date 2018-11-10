@@ -22,7 +22,7 @@ import sys
 parser = argparse.ArgumentParser()
 # Data options
 parser.add_argument('-date', dest="DATETIME", default="1986-01-29-18", help="Date to use; hours can be 00, 06, 12, or 18")
-parser.add_argument('-forecast', dest="HOUR_FORECAST", default=6, type=int, help="Instantaneous forecast at x hours (x can be 0-6)")
+parser.add_argument('-forecast', dest="HOUR_FORECAST", default='6', help="Instantaneous forecast at x hours (x can be 0-6)")
 parser.add_argument('-highres', dest="HIGH_RES", default=0, type=int, help="Download high res data? (takes much longer)")
 parser.add_argument('-rtmp', dest="REMOVE_TEMP", default=1, type=int, help="Remove temporary files?")
 # Image options
@@ -48,7 +48,6 @@ parser.add_argument('-fsize', dest="FONT_SIZE", default=40, type=int, help="Font
 
 args = parser.parse_args()
 
-TEMP_DIR = "tmp/"
 DOWNLOAD_DIR = "downloads/"
 OUTPUT_DIR = "output/"
 
@@ -57,7 +56,7 @@ HOUR_FORECAST = args.HOUR_FORECAST
 
 # Dates: Jan 1, 1979 - Mar 31, 2011
     # Source: https://www.ncdc.noaa.gov/data-access/model-data/model-datasets/climate-forecast-system-version2-cfsv2#CFS%20Reanalysis%20(CFSR)
-    # Example URL = https://nomads.ncdc.noaa.gov/data/cfsr/198601/wnd10m.l.gdas.198601.grb2.inv
+    # Example URL = https://nomads.ncdc.noaa.gov/data/cfsr/198601/wnd10m.l.gdas.198601.grb2
 # Dates: Apr 1, 2011 - ~3 months ago
     # Source: https://www.ncdc.noaa.gov/data-access/model-data/model-datasets/climate-forecast-system-version2-cfsv2#CFSv2%20Operational%20Analysis
     # Example URL = https://nomads.ncdc.noaa.gov/modeldata/cfsv2_analysis_timeseries/2011/201104/wnd10m.l.gdas.201104.grib2
@@ -68,7 +67,7 @@ if int(YYYY) > 2011 or int(YYYY) == 2011 and int(MM) >= 4:
     filename = "%s.%s%s.grib2" % (prefix, YYYY, MM)
     downloadURL = "https://nomads.ncdc.noaa.gov/modeldata/cfsv2_analysis_timeseries/%s/%s%s/%s" % (YYYY, YYYY, MM, filename)
 
-outFilename = ".".join([prefix, args.DATETIME, str(HOUR_FORECAST)])
+outFilename = ".".join([prefix, args.DATETIME.strip(), HOUR_FORECAST])
 dataPath = OUTPUT_DIR + outFilename +  ".json"
 OUTFILE = OUTPUT_DIR + outFilename + ".png" if len(args.OUTFILE) <= 0 else args.OUTFILE
 REMOVE_TEMP = args.REMOVE_TEMP > 0
@@ -112,49 +111,30 @@ if not os.path.isfile(dataPath):
         command = ['curl', '-o', gribPath, downloadURL]
         finished = subprocess.check_call(command)
 
-    # Attempt to convert .grib2 file to .json
-    # Via: https://github.com/weacast/weacast-grib2json
-    jsonPath = TEMP_DIR + filename + ".json"
-    if os.path.isfile(jsonPath):
-        print("%s already exists" % jsonPath)
-    else:
-        print("Converting .grib2 to .json...")
-        command = ['grib2json', '-d', '-n', '-o', jsonPath, gribPath]
-        finished = subprocess.check_call(command)
-
-    jsonData = {}
-    print("Reading json data...")
-    with open(jsonPath) as f:
-        jsonData = json.load(f)
-
-    # # misc debugging statements
-    # print(len(jsonData))
-    # inspectJSON(jsonData, "forecastTime")
-    # inspectJSON(jsonData, "refTime")
-    # pprint(jsonData[-1]["header"])
-    # pprint(jsonData[0]["data"][:20])
-    # sys.exit()
-
-    # Filter to only the date/time and forecast hour of choice
-    dateTimeString = "%s-%s-%sT%s:00:00.000Z" %  (YYYY, MM, DD, HH)
-    jsonData = [d for d in jsonData if str(d["header"]["refTime"])==dateTimeString and d["header"]["forecastTime"]==HOUR_FORECAST]
+    print("Reading GRIB file...")
+    import pygrib
+    grbs = pygrib.open(gribPath)
+    dataDate = int(YYYY+MM+DD)
+    validityTime = int(HH) * 100
+    grbs = grbs.select(dataDate=dataDate,stepRange=HOUR_FORECAST,validityTime=validityTime)
 
     # We should have two results (one for U, one for V)
-    if len(jsonData) != 2:
+    if len(grbs) != 2:
         print("Warning: data is invalid for this date/time/forecast. Found %s entries, expected 2" % len(jsonData))
-    if len(jsonData) < 2:
+    if len(grbs) < 2:
         print("Exiting")
         sys.exit()
 
     # Sort results, so first entry is U and second is V
-    jsonData = sorted(jsonData, key=lambda d: d["header"]["parameterNumberName"])
-    nx = jsonData[0]["header"]["nx"]
-    ny = jsonData[0]["header"]["ny"]
+    grbs = sorted(grbs, key=lambda d: d["parameterName"])
+    first = grbs[0]
+    ny, nx = grbs[0]["values"].shape
     print("%s x %s = %s" % (nx, ny, nx*ny))
 
     windData = np.zeros(nx * ny * 2)
-    for i, vector in enumerate(jsonData):
-        for j, value in enumerate(vector["data"]):
+    for i, vector in enumerate(grbs):
+        data = vector['values'].reshape(-1)
+        for j, value in enumerate(data):
             index = j * 2 + i
             windData[index] = value
 
@@ -173,7 +153,6 @@ if not os.path.isfile(dataPath):
     if REMOVE_TEMP:
         print("Deleting temporary files...")
         os.remove(gribPath)
-        os.remove(jsonPath)
 
 # We already processed data, just read it from file
 else:

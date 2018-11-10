@@ -376,10 +376,6 @@ def getPixelData(fData, dw, dh, tw, th, particles, pointsPerParticle, velocityMu
 
     return result
 
-def inspectJSON(data, key):
-    labels = sorted(list(set([d["header"][key] for d in data])))
-    pprint(labels)
-
 def offsetData(data, w, h, offset=0):
     dim = 2
     result = np.empty(h * w * dim, dtype=np.float32)
