@@ -16,9 +16,8 @@ import sys
 #  python run.py -highres 1 -lw " 1.0,1.0"
 #  python run.py -highres 1 -alpha " 0.0,255.0"
 #  python run.py -highres 1 -lw " 1.0,1.0" -brightness 0.5 -alpha " 0.0,255.0"
-
-#  python run.py -highres 1 -date " 2015-07-04-12" -rtmp 0
-#  python run.py -highres 1 -date " 2018-10-26-18" -rtmp 0
+#  python run.py -highres 1 -date " 2012-10-29-18" -out " +_sandy" -label " +, Hurricane Sandy"
+#  python run.py -highres 1 -date " 2017-08-26-18" -out " +_harvey" -label " +, Hurricane Harvey"
 
 # input
 parser = argparse.ArgumentParser()
@@ -84,7 +83,11 @@ elif int(YYYY) > 2011 or int(YYYY) == 2011 and int(MM) >= 4:
     downloadURL = "https://nomads.ncdc.noaa.gov/modeldata/cfsv2_analysis_timeseries/%s/%s%s/%s" % (YYYY, YYYY, MM, filename)
 
 dataPath = OUTPUT_DIR + outFilename +  ".json"
-OUTFILE = OUTPUT_DIR + outFilename + ".png" if len(args.OUTFILE) <= 0 else args.OUTFILE
+OUTFILE = args.OUTFILE.strip()
+if OUTFILE.startswith("+"):
+    OUTFILE = OUTPUT_DIR + outFilename + OUTFILE[1:] + ".png"
+elif len(OUTFILE) <= 0:
+    OUTFILE = OUTPUT_DIR + outFilename + ".png"
 REMOVE_TEMP = args.REMOVE_TEMP > 0
 
 DPI = args.DPI
@@ -103,9 +106,12 @@ BLUR_RADIUS = args.BLUR_RADIUS
 BRIGHTNESS = args.BRIGHTNESS
 SMOOTH_FACTOR = 2.0
 
-LABEL = args.LABEL
-if LABEL == "":
-    LABEL = requestedDate.strftime('Wind at 10m above sea level on %B %d, %Y')
+LABEL = args.LABEL.strip()
+defaultLabel = requestedDate.strftime('Wind at 10m above sea level on %B %d, %Y')
+if LABEL.startswith("+"):
+    LABEL = defaultLabel + LABEL[1:]
+elif LABEL == "":
+    LABEL = defaultLabel
 FONT = args.FONT
 FONT_SIZE = args.FONT_SIZE
 
