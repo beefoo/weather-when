@@ -12,19 +12,19 @@ from pprint import pprint
 import subprocess
 import sys
 
-#  python run.py -highres 1
-#  python run.py -highres 1 -lw " 1.0,1.0"
-#  python run.py -highres 1 -alpha " 0.0,255.0"
-#  python run.py -highres 1 -lw " 1.0,1.0" -brightness 0.5 -alpha " 0.0,255.0"
-#  python run.py -highres 1 -date " 2012-10-29-18" -out " +_sandy" -label " +, Hurricane Sandy"
-#  python run.py -highres 1 -date " 2017-08-26-18" -out " +_harvey" -label " +, Hurricane Harvey"
+#  python run.py
+#  python run.py -lw " 1.0,1.0"
+#  python run.py -alpha " 0.0,255.0"
+#  python run.py -lw " 1.0,1.0" -brightness 0.5 -alpha " 0.0,255.0"
+#  python run.py -date " 2012-10-29-18" -out " +_sandy" -label " +, Hurricane Sandy"
+#  python run.py -date " 2017-08-26-18" -out " +_harvey" -label " +, Hurricane Harvey"
 
 # input
 parser = argparse.ArgumentParser()
 # Data options
 parser.add_argument('-date', dest="DATETIME", default="1986-01-29-18", help="Date to use; hours can be 00, 06, 12, or 18")
 parser.add_argument('-forecast', dest="HOUR_FORECAST", default='6', help="Instantaneous forecast at x hours (x can be 0, 3, or 6)")
-parser.add_argument('-highres', dest="HIGH_RES", default=0, type=int, help="Download high res data? (takes much longer)")
+parser.add_argument('-highres', dest="HIGH_RES", default=1, type=int, help="Download high res data? (takes much longer)")
 parser.add_argument('-rtmp', dest="REMOVE_TEMP", default=1, type=int, help="Remove temporary files?")
 # Image options
 parser.add_argument('-width', dest="WIDTH", default=20, type=float, help="Width of image in inches")
