@@ -1,6 +1,6 @@
 # Custom historical wind maps
 
-A simple script that grabs wind data any day/time from January 1, 1979 to about three days ago and outputs a high resolution global wind map in a black-and-white, pencil-drawn style suitable for printing.
+A simple script that grabs wind data from 10 meters above sea level any day/time from January 1, 1979 to about three days ago and outputs a high resolution global wind map in a black-and-white, pencil-drawn style suitable for printing.
 
 ## Samples
 
