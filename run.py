@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-import datetime
+from datetime import datetime
+from datetime import timedelta
 import json
 from lib import *
 import numpy as np
@@ -17,12 +18,13 @@ import sys
 #  python run.py -highres 1 -lw " 1.0,1.0" -brightness 0.5 -alpha " 0.0,255.0"
 
 #  python run.py -highres 1 -date " 2015-07-04-12" -rtmp 0
+#  python run.py -highres 1 -date " 2018-10-26-18" -rtmp 0
 
 # input
 parser = argparse.ArgumentParser()
 # Data options
 parser.add_argument('-date', dest="DATETIME", default="1986-01-29-18", help="Date to use; hours can be 00, 06, 12, or 18")
-parser.add_argument('-forecast', dest="HOUR_FORECAST", default='6', help="Instantaneous forecast at x hours (x can be 0-6)")
+parser.add_argument('-forecast', dest="HOUR_FORECAST", default='6', help="Instantaneous forecast at x hours (x can be 0, 3, or 6)")
 parser.add_argument('-highres', dest="HIGH_RES", default=0, type=int, help="Download high res data? (takes much longer)")
 parser.add_argument('-rtmp', dest="REMOVE_TEMP", default=1, type=int, help="Remove temporary files?")
 # Image options
@@ -57,17 +59,30 @@ HOUR_FORECAST = args.HOUR_FORECAST
 # Dates: Jan 1, 1979 - Mar 31, 2011
     # Source: https://www.ncdc.noaa.gov/data-access/model-data/model-datasets/climate-forecast-system-version2-cfsv2#CFS%20Reanalysis%20(CFSR)
     # Example URL = https://nomads.ncdc.noaa.gov/data/cfsr/198601/wnd10m.l.gdas.198601.grb2
-# Dates: Apr 1, 2011 - ~3 months ago
+# Dates: Apr 1, 2011 - 6 months ago
     # Source: https://www.ncdc.noaa.gov/data-access/model-data/model-datasets/climate-forecast-system-version2-cfsv2#CFSv2%20Operational%20Analysis
     # Example URL = https://nomads.ncdc.noaa.gov/modeldata/cfsv2_analysis_timeseries/2011/201104/wnd10m.l.gdas.201104.grib2
+# Dates: 6 months ago - ~3days ago
+    # Source: https://www.ncdc.noaa.gov/data-access/model-data/model-datasets/global-forcast-system-gfs
+    # Example URL = https://nomads.ncdc.noaa.gov/data/gfsanl/201810/20181026/gfsanl_4_20181026_1800_006.grb2
+
 prefix = "wnd10m.gdas" if args.HIGH_RES > 0 else "wnd10m.l.gdas"
 filename = "%s.%s%s.grb2" % (prefix, YYYY, MM)
 downloadURL = "https://nomads.ncdc.noaa.gov/data/cfsr/%s%s/%s" % (YYYY, MM, filename)
-if int(YYYY) > 2011 or int(YYYY) == 2011 and int(MM) >= 4:
+now = datetime.now()
+sixMonthsAgo = now - timedelta(6*30)
+requestedDate = datetime.strptime("-".join([YYYY, MM, DD]), '%Y-%m-%d')
+isForecast = requestedDate > sixMonthsAgo
+outFilename = ".".join([prefix, args.DATETIME.strip(), HOUR_FORECAST])
+
+if isForecast:
+    filename = "gfsanl_4_%s%s%s_%s00_00%s.grb2" % (YYYY, MM, DD, HH, HOUR_FORECAST)
+    downloadURL = "https://nomads.ncdc.noaa.gov/data/gfsanl/%s%s/%s%s%s/%s" % (YYYY, MM, YYYY, MM, DD, filename)
+    outFilename = filename
+elif int(YYYY) > 2011 or int(YYYY) == 2011 and int(MM) >= 4:
     filename = "%s.%s%s.grib2" % (prefix, YYYY, MM)
     downloadURL = "https://nomads.ncdc.noaa.gov/modeldata/cfsv2_analysis_timeseries/%s/%s%s/%s" % (YYYY, YYYY, MM, filename)
 
-outFilename = ".".join([prefix, args.DATETIME.strip(), HOUR_FORECAST])
 dataPath = OUTPUT_DIR + outFilename +  ".json"
 OUTFILE = OUTPUT_DIR + outFilename + ".png" if len(args.OUTFILE) <= 0 else args.OUTFILE
 REMOVE_TEMP = args.REMOVE_TEMP > 0
@@ -90,8 +105,7 @@ SMOOTH_FACTOR = 2.0
 
 LABEL = args.LABEL
 if LABEL == "":
-    dt = datetime.datetime.strptime("-".join([YYYY, MM, DD]), '%Y-%m-%d')
-    LABEL = dt.strftime('Wind at 10m above sea level on %B %d, %Y')
+    LABEL = requestedDate.strftime('Wind at 10m above sea level on %B %d, %Y')
 FONT = args.FONT
 FONT_SIZE = args.FONT_SIZE
 
@@ -114,9 +128,17 @@ if not os.path.isfile(dataPath):
     print("Reading GRIB file...")
     import pygrib
     grbs = pygrib.open(gribPath)
-    dataDate = int(YYYY+MM+DD)
-    validityTime = int(HH) * 100
-    grbs = grbs.select(dataDate=dataDate,stepRange=HOUR_FORECAST,validityTime=validityTime)
+
+    if isForecast:
+        ugrb = grbs.select(name='10 metre U wind component')[0]
+        vgrb = grbs.select(name='10 metre V wind component')[0]
+        grbs = [ugrb, vgrb]
+    else:
+        dataDate = int(YYYY+MM+DD)
+        validityTime = int(HH) * 100
+        grbs = grbs.select(dataDate=dataDate,stepRange=HOUR_FORECAST,validityTime=validityTime)
+        # Sort results, so first entry is U and second is V
+        grbs = sorted(grbs, key=lambda d: d["parameterName"])
 
     # We should have two results (one for U, one for V)
     if len(grbs) != 2:
@@ -125,8 +147,6 @@ if not os.path.isfile(dataPath):
         print("Exiting")
         sys.exit()
 
-    # Sort results, so first entry is U and second is V
-    grbs = sorted(grbs, key=lambda d: d["parameterName"])
     first = grbs[0]
     ny, nx = grbs[0]["values"].shape
     print("%s x %s = %s" % (nx, ny, nx*ny))
