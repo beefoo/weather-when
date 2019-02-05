@@ -352,7 +352,7 @@ def getPixelData(fData, dw, dh, tw, th, particles, pointsPerParticle, velocityMu
         # print "Using GPU"
         ctx = cl.Context(devices=GPUs)
     else:
-        print "Warning: using CPU"
+        print("Warning: using CPU")
         ctx = cl.Context(CPU)
 
     # Create queue for each kernel execution
@@ -420,7 +420,7 @@ def offsetData(data, w, h, offset=0):
     if GPUs and len(GPUs) > 0:
         ctx = cl.Context(devices=GPUs)
     else:
-        print "Warning: using CPU"
+        print("Warning: using CPU")
         ctx = cl.Context(CPU)
 
     # Create queue for each kernel execution

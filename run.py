@@ -164,12 +164,12 @@ if not os.path.isfile(dataPath):
         sys.exit()
 
     first = grbs[0]
-    ny, nx = grbs[0]["values"].shape
+    ny, nx = first["values"].shape
     print("%s x %s = %s" % (nx, ny, nx*ny))
 
     windData = np.zeros(nx * ny * 2)
     for i, vector in enumerate(grbs):
-        data = vector['values'].reshape(-1)
+        data = vector["values"].reshape(-1)
         for j, value in enumerate(data):
             index = j * 2 + i
             windData[index] = value
@@ -207,7 +207,7 @@ windData = np.array(windData)
 windData = windData.astype(np.float32)
 
 # Offset the data
-print "Offsetting data..."
+print("Offsetting data...")
 offset = int(round(LON_RANGE[0] + 180.0))
 if offset != 0.0:
     offset = int(round(offset / 360.0 * nx))
