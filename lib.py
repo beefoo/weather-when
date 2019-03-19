@@ -41,8 +41,7 @@ def getData(a, yyyy, mm, dd, hh, hourForecast='0'):
             finished = subprocess.check_call(command)
 
         print("Reading GRIB file...")
-        if "pygrib" not in sys.modules:
-            import pygrib
+        import pygrib
         grbs = pygrib.open(gribPath)
 
         if isForecast:
