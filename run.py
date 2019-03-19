@@ -24,9 +24,11 @@ import sys
 parser = argparse.ArgumentParser()
 # Data options
 parser.add_argument('-date', dest="DATETIME", default="1986-01-29-18", help="Date to use; hours can be 00, 06, 12, or 18")
-parser.add_argument('-forecast', dest="HOUR_FORECAST", default='6', help="Instantaneous forecast at x hours (x can be 0, 3, or 6)")
+parser.add_argument('-forecast', dest="HOUR_FORECAST", default='0', help="Instantaneous forecast at x hours (x can be 0, 3, or 6)")
 parser.add_argument('-highres', dest="HIGH_RES", default=1, type=int, help="Download high res data? (takes much longer)")
 parser.add_argument('-rtmp', dest="REMOVE_TEMP", default=1, type=int, help="Remove temporary files?")
+parser.add_argument('-outdir', dest="OUTPUT_DIR", default="output/", help="Output directory")
+parser.add_argument('-dldir', dest="DOWNLOAD_DIR", default="downloads/", help="Download directory")
 # Image options
 parser.add_argument('-width', dest="WIDTH", default=20, type=float, help="Width of image in inches")
 parser.add_argument('-height', dest="HEIGHT", default=16, type=float, help="Height of image in inches")
@@ -54,8 +56,8 @@ parser.add_argument('-fsize', dest="FONT_SIZE", default=40, type=int, help="Font
 
 args = parser.parse_args()
 
-DOWNLOAD_DIR = "downloads/"
-OUTPUT_DIR = "output/"
+DOWNLOAD_DIR = args.DOWNLOAD_DIR
+OUTPUT_DIR = args.OUTPUT_DIR
 
 YYYY, MM, DD, HH = tuple(args.DATETIME.strip().split("-"))
 HOUR_FORECAST = args.HOUR_FORECAST
@@ -70,30 +72,13 @@ HOUR_FORECAST = args.HOUR_FORECAST
     # Source: https://www.ncdc.noaa.gov/data-access/model-data/model-datasets/global-forcast-system-gfs
     # Example URL = https://nomads.ncdc.noaa.gov/data/gfsanl/201810/20181026/gfsanl_4_20181026_1800_006.grb2
 
-prefix = "wnd10m.gdas" if args.HIGH_RES > 0 else "wnd10m.l.gdas"
-filename = "%s.%s%s.grb2" % (prefix, YYYY, MM)
-downloadURL = "https://nomads.ncdc.noaa.gov/data/cfsr/%s%s/%s" % (YYYY, MM, filename)
-now = datetime.now()
-sixMonthsAgo = now - timedelta(6*30)
-requestedDate = datetime.strptime("-".join([YYYY, MM, DD]), '%Y-%m-%d')
-isForecast = requestedDate > sixMonthsAgo
-outFilename = ".".join([prefix, args.DATETIME.strip(), HOUR_FORECAST])
+downloadURL, filename, outFilename, requestedDate, isForecast = getDownloadData(args, YYYY, MM, DD, HH, HOUR_FORECAST)
 
-if isForecast:
-    filename = "gfsanl_4_%s%s%s_%s00_00%s.grb2" % (YYYY, MM, DD, HH, HOUR_FORECAST)
-    downloadURL = "https://nomads.ncdc.noaa.gov/data/gfsanl/%s%s/%s%s%s/%s" % (YYYY, MM, YYYY, MM, DD, filename)
-    outFilename = filename
-elif int(YYYY) > 2011 or int(YYYY) == 2011 and int(MM) >= 4:
-    filename = "%s.%s%s.grib2" % (prefix, YYYY, MM)
-    downloadURL = "https://nomads.ncdc.noaa.gov/modeldata/cfsv2_analysis_timeseries/%s/%s%s/%s" % (YYYY, YYYY, MM, filename)
-
-dataPath = OUTPUT_DIR + outFilename +  ".json"
 OUTFILE = args.OUTFILE.strip()
 if OUTFILE.startswith("+"):
     OUTFILE = OUTPUT_DIR + outFilename + OUTFILE[1:] + ".png"
 elif len(OUTFILE) <= 0:
     OUTFILE = OUTPUT_DIR + outFilename + ".png"
-REMOVE_TEMP = args.REMOVE_TEMP > 0
 
 DPI = args.DPI
 WIDTH = args.WIDTH * DPI
@@ -125,85 +110,11 @@ elif LABEL == "auto":
 FONT = args.FONT
 FONT_SIZE = args.FONT_SIZE
 
-nx = None
-ny = None
-windData = []
-
-# Check to see if we already processed this data
-if not os.path.isfile(dataPath):
-
-    # Attempt to download file .grib2 file
-    gribPath = DOWNLOAD_DIR + filename
-    if os.path.isfile(gribPath):
-        print("%s already exists" % gribPath)
-    else:
-        print("Downloading %s..." % downloadURL)
-        command = ['curl', '-o', gribPath, downloadURL]
-        finished = subprocess.check_call(command)
-
-    print("Reading GRIB file...")
-    import pygrib
-    grbs = pygrib.open(gribPath)
-
-    if isForecast:
-        ugrb = grbs.select(name='10 metre U wind component')[0]
-        vgrb = grbs.select(name='10 metre V wind component')[0]
-        grbs = [ugrb, vgrb]
-    else:
-        dataDate = int(YYYY+MM+DD)
-        validityTime = int(HH) * 100
-        grbs = grbs.select(dataDate=dataDate,stepRange=HOUR_FORECAST,validityTime=validityTime)
-        # Sort results, so first entry is U and second is V
-        grbs = sorted(grbs, key=lambda d: d["parameterName"])
-
-    # We should have two results (one for U, one for V)
-    if len(grbs) != 2:
-        print("Warning: data is invalid for this date/time/forecast. Found %s entries, expected 2" % len(jsonData))
-    if len(grbs) < 2:
-        print("Exiting")
-        sys.exit()
-
-    first = grbs[0]
-    ny, nx = first["values"].shape
-    print("%s x %s = %s" % (nx, ny, nx*ny))
-
-    windData = np.zeros(nx * ny * 2)
-    for i, vector in enumerate(grbs):
-        data = vector["values"].reshape(-1)
-        for j, value in enumerate(data):
-            index = j * 2 + i
-            windData[index] = value
-
-    dataOut = {
-        "nx": nx,
-        "ny": ny,
-        "data": list(windData)
-    }
-
-    print("Writing processed data to file...")
-    with open(dataPath, 'w') as f:
-        json.dump(dataOut, f)
-        print("Wrote processed data to %s" % dataPath)
-
-    # delete temp files
-    if REMOVE_TEMP:
-        print("Deleting temporary files...")
-        os.remove(gribPath)
-
-# We already processed data, just read it from file
-else:
-    processedData = {}
-    print("Reading json data...")
-    with open(dataPath) as f:
-        processedData = json.load(f)
-
-    nx = processedData["nx"]
-    ny = processedData["ny"]
-    windData = processedData["data"]
-    print("%s x %s x 2 = %s" % (nx, ny, len(windData)))
+windData = getData(args, YYYY, MM, DD, HH, HOUR_FORECAST)
 
 # Initialize image data
-windData = np.array(windData)
+ny, nx, _ = windData.shape
+windData = windData.reshape(-1)
 windData = windData.astype(np.float32)
 
 # Offset the data

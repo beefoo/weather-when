@@ -1,10 +1,102 @@
+import bz2
+from datetime import datetime
+from datetime import timedelta
 import numpy as np
 import os
+import pickle
 from pprint import pprint
 import pyopencl as cl
 import random
+import subprocess
+import sys
 
 os.environ['PYOPENCL_COMPILER_OUTPUT'] = '1'
+
+def getData(a, yyyy, mm, dd, hh, hourForecast='0'):
+    downloadURL, filename, outFilename, requestedDate, isForecast = getDownloadData(a, yyyy, mm, dd, hh, hourForecast)
+
+    dataPath = a.OUTPUT_DIR + outFilename +  ".p.bz2"
+    windData = None
+    nx = 0
+    ny = 0
+
+    if os.path.isfile(dataPath):
+        print("Reading data...")
+        with bz2.BZ2File(dataPath, "rb") as f:
+            windData = pickle.load(f)
+            ny, nx, nz = windData.shape
+            print("Loaded file %s" % dataPath)
+            print("data shape = %s x %s x %s" % (nx, ny, nz))
+
+    # Data not present, read from file
+    if windData is None:
+
+        # Attempt to download file .grib2 file
+        gribPath = a.DOWNLOAD_DIR + filename
+        if os.path.isfile(gribPath):
+            print("%s already exists" % gribPath)
+        else:
+            print("Downloading %s..." % downloadURL)
+            command = ['curl', '-o', gribPath, downloadURL]
+            finished = subprocess.check_call(command)
+
+        print("Reading GRIB file...")
+        if "pygrib" not in sys.modules:
+            import pygrib
+        grbs = pygrib.open(gribPath)
+
+        if isForecast:
+            ugrb = grbs.select(name='10 metre U wind component')[0]
+            vgrb = grbs.select(name='10 metre V wind component')[0]
+            grbs = [ugrb, vgrb]
+        else:
+            dataDate = int(yyyy+mm+dd)
+            validityTime = int(hh) * 100
+            grbs = grbs.select(dataDate=dataDate,stepRange=hourForecast,validityTime=validityTime)
+            # Sort results, so first entry is U and second is V
+            grbs = sorted(grbs, key=lambda d: d["parameterName"])
+
+        # We should have two results (one for U, one for V)
+        if len(grbs) != 2:
+            print("Warning: data is invalid for this date/time/forecast. Found %s entries, expected 2" % len(jsonData))
+        if len(grbs) < 2:
+            print("Exiting")
+            sys.exit()
+
+        windData = np.dstack((grbs[0]["values"], grbs[1]["values"]))
+        print("data shape: %s x %s x %s" % windData.shape)
+
+        print("Writing processed data to file...")
+        pickle.dump(windData, bz2.BZ2File(dataPath, 'wb'))
+        print("Wrote processed data to %s" % dataPath)
+
+        # delete temp files
+        if a.REMOVE_TEMP > 0:
+            print("Deleting temporary files...")
+            os.remove(gribPath)
+
+    return windData
+
+def getDownloadData(a, yyyy, mm, dd, hh, hourForecast='0'):
+    prefix = "wnd10m.gdas" if a.HIGH_RES > 0 else "wnd10m.l.gdas"
+    filename = "%s.%s%s.grb2" % (prefix, yyyy, mm)
+    downloadURL = "https://nomads.ncdc.noaa.gov/data/cfsr/%s%s/%s" % (yyyy, mm, filename)
+    now = datetime.now()
+    sixMonthsAgo = now - timedelta(6*30)
+    requestedDate = datetime.strptime("-".join([yyyy, mm, dd]), '%Y-%m-%d')
+    isForecast = requestedDate > sixMonthsAgo
+    outFilename = ".".join([prefix, "-".join([str(v) for v in [yyyy, mm, dd, hh]]), hourForecast])
+
+    if isForecast:
+        filename = "gfsanl_4_%s%s%s_%s00_00%s.grb2" % (yyyy, mm, dd, hh, hourForecast)
+        downloadURL = "https://nomads.ncdc.noaa.gov/data/gfsanl/%s%s/%s%s%s/%s" % (yyyy, mm, yyyy, mm, dd, filename)
+        outFilename = filename
+
+    elif int(yyyy) > 2011 or int(yyyy) == 2011 and int(mm) >= 4:
+        filename = "%s.%s%s.grib2" % (prefix, yyyy, mm)
+        downloadURL = "https://nomads.ncdc.noaa.gov/modeldata/cfsv2_analysis_timeseries/%s/%s%s/%s" % (yyyy, yyyy, mm, filename)
+
+    return (downloadURL, filename, outFilename, requestedDate, isForecast)
 
 def getPixelData(fData, dw, dh, tw, th, particles, pointsPerParticle, velocityMultiplier, magRange, lineWidthRange, alphaRange, brightnessFactor):
     h = len(particles)
