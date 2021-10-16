@@ -79,7 +79,7 @@ def getData(a, yyyy, mm, dd, hh, hourForecast='0'):
 def getDownloadData(a, yyyy, mm, dd, hh, hourForecast='0'):
     prefix = "wnd10m.gdas" if a.HIGH_RES > 0 else "wnd10m.l.gdas"
     filename = "%s.%s%s.grb2" % (prefix, yyyy, mm)
-    downloadURL = "https://nomads.ncdc.noaa.gov/data/cfsr/%s%s/%s" % (yyyy, mm, filename)
+    downloadURL = "https://www.ncei.noaa.gov/data/climate-forecast-system/access/reanalysis/time-series/%s%s/%s" % (yyyy, mm, filename)
     now = datetime.now()
     sixMonthsAgo = now - timedelta(6*30)
     requestedDate = datetime.strptime("-".join([yyyy, mm, dd]), '%Y-%m-%d')
@@ -93,7 +93,7 @@ def getDownloadData(a, yyyy, mm, dd, hh, hourForecast='0'):
 
     elif int(yyyy) > 2011 or int(yyyy) == 2011 and int(mm) >= 4:
         filename = "%s.%s%s.grib2" % (prefix, yyyy, mm)
-        downloadURL = "https://nomads.ncdc.noaa.gov/modeldata/cfsv2_analysis_timeseries/%s/%s%s/%s" % (yyyy, yyyy, mm, filename)
+        downloadURL = "https://www.ncei.noaa.gov/data/climate-forecast-system/access/operational-analysis/time-series/%s/%s%s/%s" % (yyyy, yyyy, mm, filename)
 
     return (downloadURL, filename, outFilename, requestedDate, isForecast)
 

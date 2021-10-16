@@ -64,10 +64,12 @@ HOUR_FORECAST = args.HOUR_FORECAST
 
 # Dates: Jan 1, 1979 - Mar 31, 2011
     # Source: https://www.ncdc.noaa.gov/data-access/model-data/model-datasets/climate-forecast-system-version2-cfsv2#CFS%20Reanalysis%20(CFSR)
-    # Example URL = https://nomads.ncdc.noaa.gov/data/cfsr/198601/wnd10m.l.gdas.198601.grb2
+    # Old URL = https://nomads.ncdc.noaa.gov/data/cfsr/198601/wnd10m.l.gdas.198601.grb2
+    # New URL = https://www.ncei.noaa.gov/data/climate-forecast-system/access/reanalysis/time-series/198601/wnd10m.l.gdas.198601.grb2
 # Dates: Apr 1, 2011 - 6 months ago
     # Source: https://www.ncdc.noaa.gov/data-access/model-data/model-datasets/climate-forecast-system-version2-cfsv2#CFSv2%20Operational%20Analysis
-    # Example URL = https://nomads.ncdc.noaa.gov/modeldata/cfsv2_analysis_timeseries/2011/201104/wnd10m.l.gdas.201104.grib2
+    # Old URL = https://nomads.ncdc.noaa.gov/modeldata/cfsv2_analysis_timeseries/2011/201104/wnd10m.l.gdas.201104.grib2
+    # New URL = https://www.ncei.noaa.gov/data/climate-forecast-system/access/operational-analysis/time-series/2011/201104/wnd10m.l.gdas.201104.grib2
 # Dates: 6 months ago - ~3days ago
     # Source: https://www.ncdc.noaa.gov/data-access/model-data/model-datasets/global-forcast-system-gfs
     # Example URL = https://nomads.ncdc.noaa.gov/data/gfsanl/201810/20181026/gfsanl_4_20181026_1800_006.grb2
